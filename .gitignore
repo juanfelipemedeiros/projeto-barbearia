@@ -1,0 +1,7 @@
+api/venv/
+__pycache__/
+*.pyc
+.env
+*.bak
+node_modules/
+dist/

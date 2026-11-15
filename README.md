@@ -85,3 +85,23 @@ Abra `http://localhost:5173` no navegador e entre com o administrador criado no 
 - A API aceita requisições do site apenas em `http://localhost:5173`.
 - Os dados de `sql/dados_iniciais.sql` são exemplos. Para trocar pelos reais, edite o arquivo antes de rodar ou use comandos `UPDATE`.
 - Não coloque senhas reais dentro do código nem no repositório. Use variáveis de ambiente.
+
+## Telas do sistema
+
+### Painel
+![Painel](docs/painel.png)
+
+### Agenda
+![Agenda](docs/agenda.png)
+
+### Novo agendamento
+![Novo agendamento](docs/novo-agendamento.png)
+
+### Clientes
+![Clientes](docs/clientes.png)
+
+### Promoções
+![Promoções](docs/promocoes.png)
+
+### Barbearia
+![Barbearia](docs/barbearia.png)

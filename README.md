@@ -18,12 +18,13 @@ projeto-barbearia/
 ## O que o sistema faz
 
 - Login e logout do administrador
+- Tela de Ajustes: dados da barbearia, horários, serviços/casadinhas e barbeiros
+- Agenda com filtros e baixa de atendimentos (concluído ou cancelado)
+- Faturamento do mês com base nos atendimentos concluídos
 - Painel com resumo da semana, receita prevista e campanha ativa
-- Agenda com cancelamento de horários
 - Novo agendamento por serviço, barbeiro e data, mostrando só os horários livres
 - Cadastro automático de clientes e link direto para o WhatsApp
 - Serviços, casadinhas (combos) e planos mensais
-- Dados da barbearia e horários de funcionamento
 
 ## Requisitos
 
@@ -41,7 +42,8 @@ docker compose up -d --build
 docker compose exec api python criar_admin.py
 ```
 
-- Site: `http://localhost:5173` · API: `http://localhost:5001`
+- Site: `http://localhost:5173`. Na rede da barbearia, também abre pelo IP do computador (ex.: `http://192.168.0.10:5173`) no celular.
+- O site acessa a API pelo próprio endereço (`/api`), então não há problema de `localhost` × `127.0.0.1`.
 - O banco (MariaDB) fica no volume `db_dados` e é criado na primeira vez com os scripts da pasta `sql/`. Do computador, ele é acessível em `127.0.0.1:3307`.
 - Para parar: `docker compose down`. Os dados continuam no volume. O comando `docker compose down -v` **apaga o banco**.
 - Para importar um backup: `docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" barbearia' < backup.sql`
@@ -93,12 +95,11 @@ npm install
 npm run dev
 ```
 
-Abra `http://localhost:5173` no navegador e entre com o administrador criado no passo anterior. Use sempre `localhost`, e não `127.0.0.1`, senão o login não funciona.
+Abra `http://localhost:5173` no navegador e entre com o administrador criado no passo anterior. O Vite repassa as chamadas de `/api` para o servidor Flask.
 
 ## Observações
 
 - O painel é só para o administrador. Contas de cliente veem "Acesso restrito".
-- A API aceita requisições do site apenas em `http://localhost:5173`.
 - Os dados de `sql/dados_iniciais.sql` são exemplos. Para trocar pelos reais, edite o arquivo antes de rodar ou use comandos `UPDATE`.
 - Não coloque senhas reais dentro do código nem no repositório. Use variáveis de ambiente.
 

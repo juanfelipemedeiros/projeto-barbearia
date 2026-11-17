@@ -7,6 +7,7 @@ services:
       MARIADB_DATABASE: barbearia
       MARIADB_USER: barbearia_app
       MARIADB_PASSWORD: ${DB_SENHA:?defina DB_SENHA no .env}
+      TZ: America/Recife
     volumes:
       - db_dados:/var/lib/mysql
       - ./sql:/sql:ro
@@ -28,8 +29,10 @@ services:
       DB_USUARIO: barbearia_app
       DB_SENHA: ${DB_SENHA}
       SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY no .env}
+      TZ: America/Recife
     ports:
-      - "5001:5001"
+      # o site já acessa a API por /api; esta porta é só para testes no próprio computador
+      - "127.0.0.1:5001:5001"
     depends_on:
       db:
         condition: service_healthy

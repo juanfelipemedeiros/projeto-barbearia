@@ -223,6 +223,8 @@ def clientes_criar():
 @admin_obrigatorio
 def clientes_atualizar(cid):
     d = request.get_json(silent=True) or {}
+    if not (d.get("nome") or "").strip():
+        return jsonify(erro="Informe o nome."), 400
     executa("UPDATE clientes SET nome = %s, telefone = %s, whatsapp = %s, email = %s WHERE id = %s",
             (d.get("nome"), d.get("telefone"), d.get("whatsapp"), d.get("email"), cid))
     return jsonify(ok=True)
@@ -263,24 +265,55 @@ def agendamentos_criar():
     barbeiro_id = d.get("barbeiro_id")
     if not (servico_id and data_hora and cliente_id):
         return jsonify(erro="Informe serviço, data/hora e cliente."), 400
-    serv = consulta("SELECT duracao_min FROM servicos WHERE id = %s", (servico_id,), um=True)
+    try:
+        inicio = datetime.strptime(data_hora[:16], "%Y-%m-%d %H:%M")
+    except ValueError:
+        return jsonify(erro="Data/hora inválida."), 400
+    if inicio < datetime.now():
+        return jsonify(erro="Não é possível agendar no passado."), 400
+    serv = consulta("SELECT duracao_min FROM servicos WHERE id = %s AND ativo = 1",
+                    (servico_id,), um=True)
     if not serv:
         return jsonify(erro="Serviço não encontrado."), 400
-    # impede sobreposição de horários do mesmo barbeiro (considera a duração dos serviços)
-    conflito = consulta(
-        """SELECT 1 FROM agendamentos a JOIN servicos s ON s.id = a.servico_id
-           WHERE a.status = 'agendado' AND a.barbeiro_id <=> %s
-             AND a.data_hora < DATE_ADD(%s, INTERVAL %s MINUTE)
-             AND DATE_ADD(a.data_hora, INTERVAL s.duracao_min MINUTE) > %s""",
-        (barbeiro_id, data_hora, serv["duracao_min"], data_hora), um=True)
-    if conflito:
-        return jsonify(erro="Horário já ocupado para este barbeiro."), 409
+    if barbeiro_id is not None and not consulta(
+            "SELECT 1 FROM barbeiros WHERE id = %s AND ativo = 1", (barbeiro_id,), um=True):
+        return jsonify(erro="Barbeiro não encontrado."), 400
+
+    # precisa estar dentro do horário de funcionamento (dia_semana: 0 = domingo)
+    h = consulta("SELECT aberto, abre, fecha FROM horarios_funcionamento WHERE dia_semana = %s",
+                 ((inicio.weekday() + 1) % 7,), um=True)
+    ini_min = inicio.hour * 60 + inicio.minute
+    if not h or not h["aberto"] or h["abre"] is None or h["fecha"] is None:
+        return jsonify(erro="A barbearia não abre nesse dia."), 400
+    if ini_min < _minutos(h["abre"]) or ini_min + serv["duracao_min"] > _minutos(h["fecha"]):
+        return jsonify(erro="Fora do horário de funcionamento."), 400
+
+    # trava para que dois pedidos ao mesmo tempo não peguem o mesmo horário
+    if not consulta("SELECT GET_LOCK('barbearia_agenda', 10) AS ok", um=True)["ok"]:
+        return jsonify(erro="Sistema ocupado, tente de novo."), 503
     try:
-        novo = executa("INSERT INTO agendamentos (cliente_id, servico_id, barbeiro_id, data_hora) "
-                       "VALUES (%s,%s,%s,%s)", (cliente_id, servico_id, barbeiro_id, data_hora))
-    except pymysql.MySQLError:
-        return jsonify(erro="Dados inválidos."), 400
+        # impede sobreposição de horários do mesmo barbeiro (considera a duração dos serviços)
+        conflito = consulta(
+            """SELECT 1 FROM agendamentos a JOIN servicos s ON s.id = a.servico_id
+               WHERE a.status = 'agendado' AND a.barbeiro_id <=> %s
+                 AND a.data_hora < DATE_ADD(%s, INTERVAL %s MINUTE)
+                 AND DATE_ADD(a.data_hora, INTERVAL s.duracao_min MINUTE) > %s""",
+            (barbeiro_id, inicio, serv["duracao_min"], inicio), um=True)
+        if conflito:
+            return jsonify(erro="Horário já ocupado para este barbeiro."), 409
+        try:
+            novo = executa("INSERT INTO agendamentos (cliente_id, servico_id, barbeiro_id, data_hora) "
+                           "VALUES (%s,%s,%s,%s)", (cliente_id, servico_id, barbeiro_id, inicio))
+        except pymysql.MySQLError:
+            return jsonify(erro="Dados inválidos."), 400
+    finally:
+        consulta("SELECT RELEASE_LOCK('barbearia_agenda')")
     return jsonify(id=novo), 201
+
+
+def _minutos(t):
+    """TIME do MariaDB chega como timedelta."""
+    return int(t.total_seconds() // 60)
 
 
 @app.patch("/api/agendamentos/<int:aid>")
@@ -331,7 +364,21 @@ def horarios_ler():
 @admin_obrigatorio
 def horarios_salvar():
     """Recebe uma lista: [{dia_semana: 0-6, aberto: 1, abre: "09:00", fecha: "19:00"}, ...]"""
-    for h in request.get_json(silent=True) or []:
+    lista = request.get_json(silent=True)
+    if not isinstance(lista, list):
+        return jsonify(erro="Envie uma lista de horários."), 400
+    for h in lista:
+        if not isinstance(h, dict) or h.get("dia_semana") not in range(7):
+            return jsonify(erro="Dia da semana inválido."), 400
+        if h.get("aberto", 1):
+            try:
+                abre = datetime.strptime(h.get("abre") or "", "%H:%M")
+                fecha = datetime.strptime(h.get("fecha") or "", "%H:%M")
+            except ValueError:
+                return jsonify(erro="Horário inválido (use HH:MM)."), 400
+            if fecha <= abre:
+                return jsonify(erro="O fechamento precisa ser depois da abertura."), 400
+    for h in lista:
         executa("""INSERT INTO horarios_funcionamento (dia_semana, aberto, abre, fecha)
                    VALUES (%s,%s,%s,%s)
                    ON DUPLICATE KEY UPDATE aberto = VALUES(aberto), abre = VALUES(abre),

@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_SENHA:?defina DB_ROOT_SENHA no .env}
+      MARIADB_DATABASE: barbearia
+      MARIADB_USER: barbearia_app
+      MARIADB_PASSWORD: ${DB_SENHA:?defina DB_SENHA no .env}
+    volumes:
+      - db_dados:/var/lib/mysql
+      - ./sql:/sql:ro
+      - ./docker/db/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    ports:
+      # porta 3307 no computador para não brigar com um MariaDB local na 3306
+      - "127.0.0.1:3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_USUARIO: barbearia_app
+      DB_SENHA: ${DB_SENHA}
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY no .env}
+    ports:
+      - "5001:5001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  site:
+    build: ./barbearia
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  db_dados:

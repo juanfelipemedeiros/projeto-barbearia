@@ -31,7 +31,23 @@ projeto-barbearia/
 - Node.js e npm
 - MariaDB
 
-## Como rodar
+## Como rodar com Docker (recomendado)
+
+Precisa só do Docker com o Compose. Na pasta do projeto:
+
+```
+cp .env.example .env      # edite e troque as senhas e a SECRET_KEY
+docker compose up -d --build
+docker compose exec api python criar_admin.py
+```
+
+- Site: `http://localhost:5173` · API: `http://localhost:5001`
+- O banco (MariaDB) fica no volume `db_dados` e é criado na primeira vez com os scripts da pasta `sql/`. Do computador, ele é acessível em `127.0.0.1:3307`.
+- Para parar: `docker compose down`. Os dados continuam no volume. O comando `docker compose down -v` **apaga o banco**.
+- Para importar um backup: `docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" barbearia' < backup.sql`
+- Para fazer um backup: `docker compose exec -T db sh -c 'mariadb-dump -uroot -p"$MARIADB_ROOT_PASSWORD" barbearia' > backup.sql`
+
+## Como rodar sem Docker
 
 ### 1. Banco de dados
 

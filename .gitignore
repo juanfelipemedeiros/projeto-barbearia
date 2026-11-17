@@ -5,3 +5,4 @@ __pycache__/
 *.bak
 node_modules/
 dist/
+backup/
